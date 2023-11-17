@@ -1,0 +1,250 @@
+name: 'Build'
+description: 'Builds c# project and generates artifacts'
+inputs:
+  version:
+    description: 'The version generated in the prepare step'
+    required: true 
+  project-path:  # id of input
+    description: 'Path to the deployable project root.'
+    required: true
+  project-file:  # id of input
+    description: 'Name of the csproj file.'
+    required: true
+  transform-configuration: 
+    description: 'Transform app configurations based on build configuration'
+    required: true
+    default: 'true'
+  setup-environment:
+    description: 'Setup dotnet build environment'
+    required: false
+    default: 'true'
+  target:
+    description: 'The dotnet target/runtime environment.'
+    required: false
+    default: 'linux-x64'
+  container-id:
+    description: 'The ID for the container in the repository.'
+    required: true
+  gcp-staging-id:
+    description: 'Project ID for Staging environment.'
+    required: true
+  gcp-staging-key:
+    description: 'Key for Staging environment.'
+    required: true
+  gcp-staging-email:
+    description: 'Account email for Staging environment.'
+    required: true
+  gcp-staging-ip:
+    description: 'IP if static required for service.'
+    required: false
+  gcp-production-id:
+    description: 'Project ID for Production environment.'
+    required: true
+  gcp-production-key:
+    description: 'Key for Production environment.'
+    required: true
+  gcp-production-email:
+    description: 'Account email for Production environment.'
+    required: true
+  gcp-production-ip:
+    description: 'IP if static required for service.'
+    required: false
+  staging-new-relic-app-id:
+    description: 'ID of the application in New Relic.'
+    required: false
+  production-new-relic-app-id:
+    description: 'ID of the application in New Relic.'
+    required: false
+  staging-replicas:
+    description: 'Number of Kubernetes replicas.'
+    default: '2'
+    required: false
+  production-replicas:
+    description: 'Number of Kubernetes replica.'
+    default: '3'
+    required: false
+  new-relic-account-id:
+    description: 'ID of the account in New Relic.'
+    required: false
+  new-relic-api-key:
+    description: 'New Relic API key.'
+    required: false
+  kubernetes:
+    description: 'Kubernetes deployment?'
+    required: false
+    default: 'true'
+  appengine:
+    description: 'AppEngine deployment? Kubernetes is default.'
+    required: false
+    default: 'false'
+  cloudrun:
+    description: 'CloudRun deployment? Kubernetes is default.'
+    required: false
+    default: 'false'
+  dotnet-framework:
+    description: 'Dotnet targets for publish.'
+    required: 'false'
+    default: 'net6.0'
+  cluster:
+    description: 'Name of the cluster to deploy the kubernetes deployment to.'
+    required: false
+    default: 'main'
+  zone:
+    description: 'The zone the cluster resources are running in.'
+    required: false
+    default: 'us-central1-a'
+runs:
+  using: "composite"
+  steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    - uses: actions/setup-dotnet@v3
+      if: ${{ inputs.setup-environment == 'true' }}
+      with:
+        dotnet-version: |
+          6.x
+          7.x
+          8.x
+    - name: Set env to Debug
+      if: (endsWith(github.ref, '/development') && endsWith(github.ref, '/main')) != true
+      run: |
+        echo "ENVIRONMENT=Debug" >> $GITHUB_ENV
+      shell: bash
+    - name: Set env to staging
+      if: endsWith(github.ref, '/development')
+      run: |
+        echo "ENVIRONMENT=Staging" >> $GITHUB_ENV
+      shell: bash
+    - name: Set env to production
+      if: endsWith(github.ref, '/main')
+      run: |
+        echo "ENVIRONMENT=Release" >> $GITHUB_ENV
+      shell: bash
+    - name: Transform Install
+      if: ${{ inputs.transform-configuration == 'true' && inputs.setup-environment == 'true' }}
+      run: |
+        dotnet tool install --global dotnet-xdt
+      shell: bash
+    - name: Transform Configuration
+      if: ${{ inputs.transform-configuration == 'true' }}
+      run: |
+          dotnet xdt --source ./${{ inputs.project-path }}/App.config --transform ./${{ inputs.project-path }}/App.${{ env.ENVIRONMENT }}.config --output ./${{ inputs.project-path }}/App.config
+      shell: bash
+    - name: Build
+      run: |
+        dotnet build -p:Version=${{ inputs.version }} --self-contained --runtime ${{inputs.target}} --configuration ${{ env.ENVIRONMENT }} ${{ inputs.project-path }}/${{ inputs.project-file }}
+      shell: bash
+    - name: Generate Artifact
+      if: endsWith(github.ref, '/development') || endsWith(github.ref, '/main')
+      run: |
+        dotnet publish --no-build --no-restore --self-contained --runtime ${{inputs.target}} --framework ${{inputs.dotnet-framework}} --configuration ${{ env.ENVIRONMENT }} ${{ inputs.project-path }}/${{ inputs.project-file }}
+      shell: bash
+    - name: Set env to staging
+      if: endsWith(github.ref, '/development')
+      run: |-
+        echo "GCP_PROJECT=${{ inputs.gcp-staging-id }}" >> $GITHUB_ENV
+        echo "CONFIGURATION=Staging" >> $GITHUB_ENV
+      shell: bash
+    - name: Set env to production
+      if: endsWith(github.ref, '/main')
+      run: |-
+        echo "GCP_PROJECT=${{ inputs.gcp-production-id }}" >> $GITHUB_ENV
+        echo "CONFIGURATION=Release" >> $GITHUB_ENV
+      shell: bash
+    - name: Google Authentication Staging
+      if: endsWith(github.ref, '/development')
+      uses: 'google-github-actions/auth@v1'
+      with:
+        workload_identity_provider: 'projects/493575278784/locations/global/workloadIdentityPools/github-actions/providers/github-actions'
+        service_account: 'github-service-account@theseus-staging-347811.iam.gserviceaccount.com'
+    - name: Google Authentication Production
+      if: endsWith(github.ref, '/main')
+      uses: 'google-github-actions/auth@v1'
+      with:
+        workload_identity_provider: 'projects/590787499692/locations/global/workloadIdentityPools/github-actions/providers/github'
+        service_account: 'github-actions@u1-staging.iam.gserviceaccount.com'
+    - name: Setup Google Cloud Tools Staging
+      if: ${{ !endsWith(github.ref, '/main') }}
+      uses: google-github-actions/setup-gcloud@v1
+      with:
+        project_id: ${{ inputs.gcp-staging-id }}
+    - name: Setup Google Cloud Tools Production
+      if: endsWith(github.ref, '/main')
+      uses: google-github-actions/setup-gcloud@v1
+      with:
+        project_id: ${{ inputs.gcp-production-id }}
+    - name: Install GKE Authentication Plugin
+      run: |-
+        gcloud components install gke-gcloud-auth-plugin
+      shell: bash
+    - name: Export GKE Authentication Variable
+      run: |-
+        echo "USE_GKE_GCLOUD_AUTH_PLUGIN=True" >> $GITHUB_ENV
+      shell: bash
+    - name: Setup Docker
+      if: endsWith(github.ref, '/development') || endsWith(github.ref, '/main')
+      run: |-
+        gcloud auth configure-docker us-central1-docker.pkg.dev
+      shell: bash
+    - name: Docker Build, Tag and Push
+      if: endsWith(github.ref, '/development') || endsWith(github.ref, '/main')
+      run: |-
+        docker build --build-arg CONFIGURATION=${{ env.CONFIGURATION }} --build-arg TARGET=${{inputs.target}} --build-arg PROJECT=${{ env.GCP_PROJECT }} -t us-central1-docker.pkg.dev/${{ env.GCP_PROJECT }}/tracstar/${{ inputs.container-id }}:${{ inputs.version }} ./${{ inputs.project-path }}
+        docker push us-central1-docker.pkg.dev/${{ env.GCP_PROJECT }}/tracstar/${{ inputs.container-id }}:${{ inputs.version }}
+      shell: bash
+    - name: Replace variables in production Kubernetes config
+      if: ${{ (endsWith(github.ref, '/main')) && (inputs.kubernetes == 'true') }}
+      uses: TracPlus/replace-action@master
+      with:
+        files: ${{ inputs.project-path }}/Kubernetes/deployment.yaml
+        replacements: '@VERSION=${{ inputs.version }},@PROJECT=${{ env.GCP_PROJECT }},@IP=${{ inputs.gcp-production-ip }},@REPLICAS=${{ inputs.production-replicas }}'
+    - name: Replace variables in staging Kubernetes config
+      if: ${{ (endsWith(github.ref, '/development')) && (inputs.kubernetes == 'true') }}
+      uses: TracPlus/replace-action@master
+      with:
+        files: ${{ inputs.project-path }}/Kubernetes/deployment.yaml
+        replacements: '@VERSION=${{ inputs.version }},@PROJECT=${{ env.GCP_PROJECT }},@IP=${{ inputs.gcp-staging-ip }},@REPLICAS=${{ inputs.staging-replicas }}'
+    # Get the GKE credentials, so we can deploy to the cluster
+    - name: Set Cluster Credentials
+      if: endsWith(github.ref, '/development') || endsWith(github.ref, '/main')
+      run: |-
+        gcloud container clusters get-credentials ${{ inputs.cluster }} --zone ${{ inputs.zone }} --project ${{ env.GCP_PROJECT }}
+      shell: bash
+    # Apply kubernetes changes.
+    - name: Deploy to Kubernetes
+      if: ${{ (endsWith(github.ref, '/development') || endsWith(github.ref, '/main')) && (inputs.kubernetes == 'true') }}
+      run: |
+        kubectl apply -f ${{ inputs.project-path }}/Kubernetes/deployment.yaml
+      shell: bash
+    - name: Deploy to Cloud Run
+      if: ${{ (endsWith(github.ref, '/development') || endsWith(github.ref, '/main')) && (inputs.kubernetes == 'false' && inputs.cloudrun == 'true') }}
+      id: deploy-staging
+      uses: google-github-actions/deploy-cloudrun@v0
+      with:
+        service: ${{ inputs.container-id }}
+        region: 'us-central1'
+        image: us-central1-docker.pkg.dev/${{ env.GCP_PROJECT }}/tracstar/${{ inputs.container-id }}:${{ inputs.version }}
+    - name: Deploy to AppEngine
+      if: ${{ (endsWith(github.ref, '/development') || endsWith(github.ref, '/main')) && (inputs.kubernetes == 'false' && inputs.appengine == 'true') }}
+      run: |
+        VERSION="${{ inputs.version }}"
+        NO_DOT_VERSION="${VERSION//./-}"
+        gcloud app deploy --appyaml=${{ inputs.project-path }}/app.yaml --image-url=us-central1-docker.pkg.dev/${{ env.GCP_PROJECT }}/tracstar/${{ inputs.container-id }}:${{ inputs.version }} --version=$NO_DOT_VERSION
+      shell: bash
+    - name: New Relic Staging Application Deployment Marker
+      if: endsWith(github.ref, '/development')
+      uses: newrelic/deployment-marker-action@v1.0.0
+      with:
+        apiKey: ${{ inputs.new-relic-api-key }}
+        accountId: ${{ inputs.new-relic-account-id }}
+        applicationId: ${{ inputs.staging-new-relic-app-id }}
+        revision: ${{ inputs.version }}
+    - name: New Relic Production Application Deployment Marker
+      if: endsWith(github.ref, '/main')
+      uses: newrelic/deployment-marker-action@v1.0.0
+      with:
+        apiKey: ${{ inputs.new-relic-api-key }}
+        accountId: ${{ inputs.new-relic-account-id }}
+        applicationId: ${{ inputs.production-new-relic-app-id }}
+        revision: ${{ inputs.version }}
