@@ -261,7 +261,7 @@ runs:
     - name: Setup AWS Docker Authentication
       if: ${{ (endsWith(github.ref, '/aws') && inputs.fargate == 'true') }}
       run: |
-        aws ecr get-login-password --region us-east-2 | docker login --username AWS --password-stdin 280078508051.dkr.ecr.us-east-2.amazonaws.com
+        aws ecr get-login-password --region ${{ inputs.aws-region }} | docker login --username AWS --password-stdin 280078508051.dkr.ecr.${{ inputs.aws-region }}.amazonaws.com
       shell: bash
     - name: Set up QEMU
       if: ${{ (endsWith(github.ref, '/aws') && inputs.fargate == 'true') }}
@@ -272,7 +272,7 @@ runs:
     - name: Gateway Docker Build, Tag and Push
       if: ${{ (endsWith(github.ref, '/aws') && inputs.fargate == 'true') }}
       run: |
-        docker buildx build --platform linux/arm64/v8 --build-arg CONFIGURATION=Release --tag 280078508051.dkr.ecr.us-east-2.amazonaws.com/${{ inputs.container-id }}:${{ steps.gitversion.outputs.NuGetVersionV2 }} --push .
+        docker buildx build --platform linux/arm64/v8 --build-arg CONFIGURATION=Release --tag 280078508051.dkr.ecr.${{ inputs.aws-region }}.amazonaws.com/${{ inputs.container-id }}:${{ steps.gitversion.outputs.NuGetVersionV2 }} --push .
       shell: bash
     - name: Tag Release
       if: ${{ (endsWith(github.ref, '/aws') && inputs.fargate == 'true') }}
