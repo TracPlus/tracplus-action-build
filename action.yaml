@@ -243,11 +243,11 @@ runs:
         gcloud app deploy --appyaml=${{ inputs.project-path }}/app.yaml --image-url=us-central1-docker.pkg.dev/${{ env.GCP_PROJECT }}/tracstar/${{ inputs.container-id }}:${{ inputs.version }} --version=$NO_DOT_VERSION
       shell: bash
     - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v1
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ECR_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_ECR_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
+      uses: aws-actions/configure-aws-credentials@v1
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ECR_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_ECR_SECRET_ACCESS_KEY }}
+        aws-region: us-east-1
     - name: Setup AWS Docker Authentication
       if: ${{ (endsWith(github.ref, '/aws') && inputs.fargate == 'true') }}
       run: |
