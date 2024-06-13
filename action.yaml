@@ -277,7 +277,7 @@ runs:
     - name: Gateway Docker Build, Tag and Push
       if: ${{ (endsWith(github.ref, '/aws') && inputs.fargate == 'true') }}
       run: |
-        docker buildx build --build-arg CONFIGURATION=${{ env.CONFIGURATION }} --build-arg TARGET=${{inputs.target}} --platform linux/arm64/v8 --build-arg CONFIGURATION=Release --tag 280078508051.dkr.ecr.${{ inputs.aws-region }}.amazonaws.com/${{ inputs.container-id }}:${{ inputs.version }} --push ./${{ inputs.project-path }}
+        docker buildx build --build-arg CONFIGURATION=${{ env.CONFIGURATION }} --build-arg TARGET=${{inputs.target}} --platform linux/arm64/v8 --tag 280078508051.dkr.ecr.${{ inputs.aws-region }}.amazonaws.com/${{ inputs.container-id }}:${{ inputs.version }} --push ./${{ inputs.project-path }}
       shell: bash
     - name: Tag Release
       if: ${{ (endsWith(github.ref, '/aws') && inputs.fargate == 'true') }}
