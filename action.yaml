@@ -93,6 +93,16 @@ inputs:
     description: 'Target cloud environment.'
     required: 'false'
     default: 'gcp'
+  aws-access-key-id:
+    description: 'AWS service account key id'
+    required: 'false'
+  aws-secret-access-key:
+    description: 'AWS service account key'
+    required: 'false'
+  aws-region:
+    description: 'AWS region to perform actions against'
+    required: 'false'
+    default: 'us-east-2'
   cluster:
     description: 'Name of the cluster to deploy the kubernetes deployment to.'
     required: false
@@ -245,9 +255,9 @@ runs:
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v1
       with:
-        aws-access-key-id: ${{ secrets.AWS_ECR_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_ECR_SECRET_ACCESS_KEY }}
-        aws-region: us-east-1
+        aws-access-key-id: ${{ inputs.aws-access-key-id }}
+        aws-secret-access-key: ${{ inputs.aws-secret-access-key }}
+        aws-region: ${{ inputs.aws-region }}
     - name: Setup AWS Docker Authentication
       if: ${{ (endsWith(github.ref, '/aws') && inputs.fargate == 'true') }}
       run: |
