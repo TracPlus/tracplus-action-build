@@ -240,16 +240,20 @@ runs:
       if: ${{ (endsWith(github.ref, '/aws') && inputs.fargate == 'true') }}
       run: |
         aws ecr get-login-password --region us-east-2 | docker login --username AWS --password-stdin 280078508051.dkr.ecr.us-east-2.amazonaws.com
+      shell: bash
     - name: Set up QEMU
       if: ${{ (endsWith(github.ref, '/aws') && inputs.fargate == 'true') }}
       uses: docker/setup-qemu-action@v1
+      shell: bash
     - name: Set up Docker Buildx
       if: ${{ (endsWith(github.ref, '/aws') && inputs.fargate == 'true') }}
       uses: docker/setup-buildx-action@v1
+      shell: bash
     - name: Gateway Docker Build, Tag and Push
       if: ${{ (endsWith(github.ref, '/aws') && inputs.fargate == 'true') }}
       run: |
         docker buildx build --platform linux/arm64/v8 --build-arg CONFIGURATION=Release --tag 280078508051.dkr.ecr.us-east-2.amazonaws.com/${{ inputs.container-id }}:${{ steps.gitversion.outputs.NuGetVersionV2 }} --push .
+      shell: bash
     - name: Tag Release
       if: ${{ (endsWith(github.ref, '/aws') && inputs.fargate == 'true') }}
       run: |-
@@ -259,6 +263,7 @@ runs:
         git config user.email "${GITHUB_ACTOR}@users.noreply.github.com"
         git tag -a "${tag}" -m "${message}"
         git push origin "${tag}"
+      shell: bash
     - name: New Relic Staging Application Deployment Marker
       if: endsWith(github.ref, '/development')
       uses: newrelic/deployment-marker-action@v1.0.0
