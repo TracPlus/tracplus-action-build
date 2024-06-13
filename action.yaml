@@ -183,6 +183,7 @@ runs:
       with:
         project_id: ${{ inputs.gcp-production-id }}
     - name: Install GKE Authentication Plugin
+      if: ${{ inputs.cloud-provider == 'gcp' }}
       run: |-
         gcloud components install gke-gcloud-auth-plugin
       shell: bash
