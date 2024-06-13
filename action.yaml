@@ -269,6 +269,11 @@ runs:
     - name: Set up Docker Buildx
       if: ${{ (endsWith(github.ref, '/aws') && inputs.fargate == 'true') }}
       uses: docker/setup-buildx-action@v1
+    - name: Debug configuration output
+      if: ${{ (endsWith(github.ref, '/aws') && inputs.fargate == 'true') }}
+      run: |
+        echo ${{ env.CONFIGURATION }} >> foo | cat foo
+      shell: bash
     - name: Gateway Docker Build, Tag and Push
       if: ${{ (endsWith(github.ref, '/aws') && inputs.fargate == 'true') }}
       run: |
