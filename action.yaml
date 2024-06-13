@@ -89,6 +89,10 @@ inputs:
     description: 'Dotnet targets for publish.'
     required: 'false'
     default: 'net6.0'
+  cloud-provider:
+    description: 'Target cloud environment.'
+    required: 'false'
+    default: 'gcp'
   cluster:
     description: 'Name of the cluster to deploy the kubernetes deployment to.'
     required: false
@@ -157,24 +161,24 @@ runs:
         echo "CONFIGURATION=Release" >> $GITHUB_ENV
       shell: bash
     - name: Google Authentication Staging
-      if: endsWith(github.ref, '/development')
+      if: ${{ endsWith(github.ref, '/development') && inputs.cloud-provider == 'gcp' }}
       uses: 'google-github-actions/auth@v1'
       with:
         workload_identity_provider: 'projects/493575278784/locations/global/workloadIdentityPools/github-actions/providers/github-actions'
         service_account: 'github-service-account@theseus-staging-347811.iam.gserviceaccount.com'
     - name: Google Authentication Production
-      if: endsWith(github.ref, '/main')
+      if: ${{ endsWith(github.ref, '/main') && inputs.cloud-provider == 'gcp' }}
       uses: 'google-github-actions/auth@v1'
       with:
         workload_identity_provider: 'projects/590787499692/locations/global/workloadIdentityPools/github-actions/providers/github'
         service_account: 'github-actions@u1-staging.iam.gserviceaccount.com'
     - name: Setup Google Cloud Tools Staging
-      if: ${{ !endsWith(github.ref, '/main') }}
+      if: ${{ !endsWith(github.ref, '/main') && inputs.cloud-provider == 'gcp' }}
       uses: google-github-actions/setup-gcloud@v1
       with:
         project_id: ${{ inputs.gcp-staging-id }}
     - name: Setup Google Cloud Tools Production
-      if: endsWith(github.ref, '/main')
+      if: ${{ endsWith(github.ref, '/main') && inputs.cloud-provider == 'gcp' }}
       uses: google-github-actions/setup-gcloud@v1
       with:
         project_id: ${{ inputs.gcp-production-id }}
@@ -183,46 +187,47 @@ runs:
         gcloud components install gke-gcloud-auth-plugin
       shell: bash
     - name: Export GKE Authentication Variable
+      if: ${{ inputs.cloud-provider == 'gcp' }}
       run: |-
         echo "USE_GKE_GCLOUD_AUTH_PLUGIN=True" >> $GITHUB_ENV
       shell: bash
     - name: Setup Docker
-      if: endsWith(github.ref, '/development') || endsWith(github.ref, '/main')
+      if: ${{ (endsWith(github.ref, '/development') || endsWith(github.ref, '/main')) && inputs.cloud-provider == 'gcp' }}
       run: |-
         gcloud auth configure-docker us-central1-docker.pkg.dev
       shell: bash
     - name: Docker Build, Tag and Push
-      if: endsWith(github.ref, '/development') || endsWith(github.ref, '/main')
+      if: ${{ (endsWith(github.ref, '/development') || endsWith(github.ref, '/main')) && inputs.cloud-provider == 'gcp' }}
       run: |-
         docker build --build-arg CONFIGURATION=${{ env.CONFIGURATION }} --build-arg TARGET=${{inputs.target}} --build-arg PROJECT=${{ env.GCP_PROJECT }} -t us-central1-docker.pkg.dev/${{ env.GCP_PROJECT }}/tracstar/${{ inputs.container-id }}:${{ inputs.version }} ./${{ inputs.project-path }}
         docker push us-central1-docker.pkg.dev/${{ env.GCP_PROJECT }}/tracstar/${{ inputs.container-id }}:${{ inputs.version }}
       shell: bash
     - name: Replace variables in production Kubernetes config
-      if: ${{ (endsWith(github.ref, '/main')) && (inputs.kubernetes == 'true') }}
+      if: ${{ (endsWith(github.ref, '/main')) && (inputs.kubernetes == 'true') && inputs.cloud-provider == 'gcp' }}
       uses: TracPlus/replace-action@master
       with:
         files: ${{ inputs.project-path }}/Kubernetes/deployment.yaml
         replacements: '@VERSION=${{ inputs.version }},@PROJECT=${{ env.GCP_PROJECT }},@IP=${{ inputs.gcp-production-ip }},@REPLICAS=${{ inputs.production-replicas }}'
     - name: Replace variables in staging Kubernetes config
-      if: ${{ (endsWith(github.ref, '/development')) && (inputs.kubernetes == 'true') }}
+      if: ${{ (endsWith(github.ref, '/development')) && (inputs.kubernetes == 'true') && inputs.cloud-provider == 'gcp' }}
       uses: TracPlus/replace-action@master
       with:
         files: ${{ inputs.project-path }}/Kubernetes/deployment.yaml
         replacements: '@VERSION=${{ inputs.version }},@PROJECT=${{ env.GCP_PROJECT }},@IP=${{ inputs.gcp-staging-ip }},@REPLICAS=${{ inputs.staging-replicas }}'
     # Get the GKE credentials, so we can deploy to the cluster
     - name: Set Cluster Credentials
-      if: endsWith(github.ref, '/development') || endsWith(github.ref, '/main')
+      if: ${{ (endsWith(github.ref, '/development') || endsWith(github.ref, '/main')) && inputs.cloud-provider == 'gcp' }}
       run: |-
         gcloud container clusters get-credentials ${{ inputs.cluster }} --zone ${{ inputs.zone }} --project ${{ env.GCP_PROJECT }}
       shell: bash
     # Apply kubernetes changes.
     - name: Deploy to Kubernetes
-      if: ${{ (endsWith(github.ref, '/development') || endsWith(github.ref, '/main')) && (inputs.kubernetes == 'true') }}
+      if: ${{ (endsWith(github.ref, '/development') || endsWith(github.ref, '/main')) && (inputs.kubernetes == 'true') && inputs.cloud-provider == 'gcp' }}
       run: |
         kubectl apply -f ${{ inputs.project-path }}/Kubernetes/deployment.yaml
       shell: bash
     - name: Deploy to Cloud Run
-      if: ${{ (endsWith(github.ref, '/development') || endsWith(github.ref, '/main')) && (inputs.kubernetes == 'false' && inputs.cloudrun == 'true') }}
+      if: ${{ (endsWith(github.ref, '/development') || endsWith(github.ref, '/main')) && (inputs.kubernetes == 'false' && inputs.cloudrun == 'true' && inputs.cloud-provider == 'gcp') }}
       id: deploy-staging
       uses: google-github-actions/deploy-cloudrun@v0
       with:
@@ -230,7 +235,7 @@ runs:
         region: 'us-central1'
         image: us-central1-docker.pkg.dev/${{ env.GCP_PROJECT }}/tracstar/${{ inputs.container-id }}:${{ inputs.version }}
     - name: Deploy to AppEngine
-      if: ${{ (endsWith(github.ref, '/development') || endsWith(github.ref, '/main')) && (inputs.kubernetes == 'false' && inputs.appengine == 'true') }}
+      if: ${{ (endsWith(github.ref, '/development') || endsWith(github.ref, '/main')) && (inputs.kubernetes == 'false' && inputs.appengine == 'true' && inputs.cloud-provider == 'gcp') }}
       run: |
         VERSION="${{ inputs.version }}"
         NO_DOT_VERSION="${VERSION//./-}"
