@@ -274,20 +274,10 @@ runs:
       run: |
         echo ${{ env.CONFIGURATION }} >> foo | cat foo
       shell: bash
-    - name: Gateway Docker Build, Tag and Push
+    - name: Docker Build, Tag and Push
       if: ${{ (endsWith(github.ref, '/aws') && inputs.fargate == 'true') }}
       run: |
         docker buildx build --build-arg CONFIGURATION=${{ env.CONFIGURATION }} --build-arg TARGET=${{inputs.target}} --platform linux/arm64/v8 --tag 280078508051.dkr.ecr.${{ inputs.aws-region }}.amazonaws.com/${{ inputs.container-id }}:${{ inputs.version }} --push ./${{ inputs.project-path }}
-      shell: bash
-    - name: Tag Release
-      if: ${{ (endsWith(github.ref, '/aws') && inputs.fargate == 'true') }}
-      run: |-
-        tag=${{ steps.gitversion.outputs.AssemblySemVer }}
-        message='${{ steps.gitversion.outputs.AssemblySemVer }}: PR #${{ github.event.pull_request.number }} ${{ github.event.pull_request.title }}'
-        git config user.name "${GITHUB_ACTOR}"
-        git config user.email "${GITHUB_ACTOR}@users.noreply.github.com"
-        git tag -a "${tag}" -m "${message}"
-        git push origin "${tag}"
       shell: bash
     - name: New Relic Staging Application Deployment Marker
       if: endsWith(github.ref, '/development')
