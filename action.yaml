@@ -106,6 +106,7 @@ runs:
           6.x
           7.x
           8.x
+          9.x
     - name: Set env to Debug
       if: (endsWith(github.ref, '/development') && endsWith(github.ref, '/main')) != true
       run: |
